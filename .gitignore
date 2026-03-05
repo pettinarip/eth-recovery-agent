@@ -1,0 +1,6 @@
+.env
+agent.log
+state/
+backup/
+.claude/
+repo
