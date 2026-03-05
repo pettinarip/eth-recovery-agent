@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+AGENT_DIR=~/recovery-agent
+
+# Load secrets from .env if present
+if [[ -f "$AGENT_DIR/.env" ]]; then
+  set -a
+  source "$AGENT_DIR/.env"
+  set +a
+fi
+
+LOGFILE="$AGENT_DIR/agent.log"
+STATE_DIR="$AGENT_DIR/state"
+REPO_DIR="$AGENT_DIR/repo"
+
+# Sentry project config (change these per-repo)
+export SENTRY_ORG="ethereumorg-ow"
+export SENTRY_PROJECT="ethorg"
+
+# Netlify config (for function log fetching)
+export NETLIFY_AUTH_TOKEN="${NETLIFY_AUTH_TOKEN:-}"
+export NETLIFY_SITE_ID="${NETLIFY_SITE_ID:-}"
+
+# Error sources to enable (comma-separated: sentry,netlify-logs,crawler)
+export ENABLED_SOURCES="${ENABLED_SOURCES:-sentry,netlify-logs,netlify-function-logs,crawler}"
+
+# Kill switch
+if [[ "${RECOVERY_AGENT_ENABLED:-true}" != "true" ]]; then
+  echo "$(date -Iseconds) Agent disabled via RECOVERY_AGENT_ENABLED" >> "$LOGFILE"
+  exit 0
+fi
+
+# Validate repo exists
+if [[ ! -d "$REPO_DIR" ]]; then
+  echo "$(date -Iseconds) ERROR: Repo not found at $REPO_DIR" >> "$LOGFILE"
+  exit 1
+fi
+
+# Read the agent instructions (injected as system prompt overlay)
+AGENT_PROMPT=$(cat "$AGENT_DIR/system-prompt.md")
+
+export STATE_DIR
+
+cleanup() {
+  echo "$(date -Iseconds) Agent interrupted." >> "$LOGFILE"
+  exit 1
+}
+trap cleanup INT TERM
+
+# Build allowed tools list based on enabled sources
+ALLOWED_TOOLS=("Bash()" "Read()" "Write()" "Edit()" "Glob()" "Grep()")
+if [[ "$ENABLED_SOURCES" == *"sentry"* ]]; then
+  ALLOWED_TOOLS+=("mcp__sentry()")
+fi
+
+echo "$(date -Iseconds) === Cycle start (sources: $ENABLED_SOURCES) ===" >> "$LOGFILE"
+
+# ── Phase 1: Deterministic triage (no LLM) ──
+export CYCLE_TIMESTAMP
+CYCLE_TIMESTAMP="$(date -Iseconds)"
+
+echo "$(date -Iseconds) Running triage..." >> "$LOGFILE"
+node "$AGENT_DIR/scripts/triage.mjs" 2>> "$LOGFILE"
+
+QUEUE_FILE="$STATE_DIR/triage-queue.json"
+QUEUE_LEN=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$QUEUE_FILE','utf-8')).length)")
+
+if [[ "$QUEUE_LEN" == "0" ]]; then
+  echo "$(date -Iseconds) Queue empty after triage. Done." >> "$LOGFILE"
+  echo "$(date -Iseconds) === Cycle end ===" >> "$LOGFILE"
+  exit 0
+fi
+
+echo "$(date -Iseconds) Triage complete: $QUEUE_LEN items queued" >> "$LOGFILE"
+
+# ── Phase 2: Process items one by one (LLM per item) ──
+while true; do
+  CYCLE_TIMESTAMP="$(date -Iseconds)"
+  export CYCLE_TIMESTAMP
+
+  QUEUE_LEN=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$QUEUE_FILE','utf-8')).length)")
+  if [[ "$QUEUE_LEN" == "0" ]]; then
+    echo "$(date -Iseconds) Queue empty. Done." >> "$LOGFILE"
+    break
+  fi
+
+  echo "$(date -Iseconds) $QUEUE_LEN items in queue. Processing next..." >> "$LOGFILE"
+
+  cd "$REPO_DIR"
+  claude -p "Process the next item from the triage queue. State directory: $STATE_DIR" \
+    --append-system-prompt "$AGENT_PROMPT" \
+    --allowedTools "${ALLOWED_TOOLS[@]}" \
+    --disallowedTools "Bash(git push:*)" "Bash(git push)" "Bash(gh:*)" \
+    --add-dir "$STATE_DIR" \
+    >> "$LOGFILE" 2>&1
+done
+
+echo "$(date -Iseconds) === Cycle end ===" >> "$LOGFILE"
