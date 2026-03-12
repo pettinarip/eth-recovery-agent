@@ -1,0 +1,27 @@
+{
+  "name": "recovery-agent",
+  "version": "1.0.0",
+  "description": "An automated system that monitors [ethereum.org](https://ethereum.org) for production errors and uses Claude Code CLI to analyze, triage, and fix them — or escalate when it can't.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "crawl": "node scripts/crawl.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/pettinarip/eth-recovery-agent.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/pettinarip/eth-recovery-agent/issues"
+  },
+  "homepage": "https://github.com/pettinarip/eth-recovery-agent#readme",
+  "dependencies": {
+    "@spider-rs/spider-rs": "^0.0.163",
+    "@spider-rs/spider-rs-linux-x64-gnu": "^0.0.157",
+    "node-html-parser": "^7.1.0"
+  }
+}
