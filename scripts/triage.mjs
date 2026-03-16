@@ -29,9 +29,30 @@ if (!CYCLE_TIMESTAMP) {
   process.exit(1)
 }
 
+const ACTED_ON_TTL_DAYS = 30
+
+function pruneActedOn(actedOn) {
+  const cutoff = Date.now() - ACTED_ON_TTL_DAYS * 24 * 60 * 60 * 1000
+  let pruned = 0
+  for (const [id, entry] of Object.entries(actedOn)) {
+    const ts = Date.parse(entry.timestamp)
+    if (!ts || ts < cutoff) {
+      delete actedOn[id]
+      pruned++
+    }
+  }
+  return pruned
+}
+
 async function main() {
   const actedOnPath = join(STATE_DIR, "acted-on.json")
   const actedOn = loadJSON(actedOnPath, {})
+
+  const pruned = pruneActedOn(actedOn)
+  if (pruned > 0) {
+    console.error(`Pruned ${pruned} acted-on entries older than ${ACTED_ON_TTL_DAYS} days`)
+  }
+
   let allCandidates = []
   let totalSkipped = 0
 
@@ -72,9 +93,9 @@ async function main() {
     totalSkipped += skipped
   }
 
-  if (totalSkipped > 0) {
+  if (totalSkipped > 0 || pruned > 0) {
     saveJSON(actedOnPath, actedOn)
-    console.error(`Auto-skipped ${totalSkipped} noise items`)
+    if (totalSkipped > 0) console.error(`Auto-skipped ${totalSkipped} noise items`)
   }
 
   allCandidates.sort((a, b) => String(a.timestamp || "").localeCompare(String(b.timestamp || "")))

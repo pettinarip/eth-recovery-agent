@@ -56,12 +56,17 @@ function hasAppCodeInStack(event) {
   return false
 }
 
-function isSentryNoise(issue, event) {
+function isTitleNoise(issue) {
   const title = issue.title || ""
-
   for (const pattern of NOISE_TITLE_PATTERNS) {
     if (pattern.test(title)) return { noise: true, reason: `Title matches noise: ${pattern}` }
   }
+  return { noise: false, reason: "" }
+}
+
+function isSentryNoise(issue, event) {
+  const titleCheck = isTitleNoise(issue)
+  if (titleCheck.noise) return titleCheck
 
   if (event) {
     for (const entry of event.entries || []) {
@@ -84,6 +89,8 @@ function isSentryNoise(issue, event) {
   return { noise: false, reason: "" }
 }
 
+const CONCURRENT_EVENT_FETCHES = 5
+
 export async function fetchSentry({ authToken, org, project, actedOn, cycleTimestamp }) {
   if (!authToken) {
     console.error("WARNING: SENTRY_AUTH_TOKEN not set, skipping Sentry source")
@@ -100,6 +107,8 @@ export async function fetchSentry({ authToken, org, project, actedOn, cycleTimes
   const candidates = []
   let skipped = 0
 
+  // ── Early filtering: skip already-seen and title-noise before fetching events ──
+  const needEventFetch = []
   for (const issue of issues) {
     const shortId = issue.shortId || ""
     if (shortId in actedOn) {
@@ -107,24 +116,48 @@ export async function fetchSentry({ authToken, org, project, actedOn, cycleTimes
       continue
     }
 
-    const event = await sentryAPI(`issues/${issue.id}/events/latest/`)
-    const { noise, reason } = isSentryNoise(issue, event)
-
-    if (noise) {
-      autoSkip(actedOn, shortId, reason, cycleTimestamp)
+    const titleCheck = isTitleNoise(issue)
+    if (titleCheck.noise) {
+      autoSkip(actedOn, shortId, titleCheck.reason, cycleTimestamp)
       skipped++
-      console.error(`  AUTO-SKIP ${shortId}: ${reason}`)
+      console.error(`  AUTO-SKIP ${shortId}: ${titleCheck.reason}`)
       continue
     }
 
-    candidates.push({
-      id: shortId,
-      source: "sentry",
-      title: issue.title || "",
-      timestamp: issue.firstSeen || "",
-      last_seen: issue.lastSeen || "",
-      event_count: issue.count || 0,
-    })
+    needEventFetch.push(issue)
+  }
+
+  console.error(`  ${needEventFetch.length} issues need event fetch (${issues.length - needEventFetch.length} filtered early)`)
+
+  // ── Fetch events in parallel batches ──
+  for (let i = 0; i < needEventFetch.length; i += CONCURRENT_EVENT_FETCHES) {
+    const batch = needEventFetch.slice(i, i + CONCURRENT_EVENT_FETCHES)
+    const events = await Promise.all(
+      batch.map((issue) => sentryAPI(`issues/${issue.id}/events/latest/`))
+    )
+
+    for (let j = 0; j < batch.length; j++) {
+      const issue = batch[j]
+      const event = events[j]
+      const shortId = issue.shortId || ""
+
+      const { noise, reason } = isSentryNoise(issue, event)
+      if (noise) {
+        autoSkip(actedOn, shortId, reason, cycleTimestamp)
+        skipped++
+        console.error(`  AUTO-SKIP ${shortId}: ${reason}`)
+        continue
+      }
+
+      candidates.push({
+        id: shortId,
+        source: "sentry",
+        title: issue.title || "",
+        timestamp: issue.firstSeen || "",
+        last_seen: issue.lastSeen || "",
+        event_count: issue.count || 0,
+      })
+    }
   }
 
   return { candidates, skipped }
