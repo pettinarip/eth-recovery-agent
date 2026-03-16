@@ -85,8 +85,6 @@ fi
 echo "$(date -Iseconds) Triage complete: $QUEUE_LEN items queued" >> "$LOGFILE"
 
 # ── Phase 2: Process items one by one (LLM per item) ──
-ITEM_TIMEOUT="${ITEM_TIMEOUT:-600}"  # 10 minutes per item
-
 while true; do
   CYCLE_TIMESTAMP="$(date -Iseconds)"
   export CYCLE_TIMESTAMP
@@ -100,20 +98,12 @@ while true; do
   echo "$(date -Iseconds) $QUEUE_LEN items in queue. Processing next..." >> "$LOGFILE"
 
   cd "$REPO_DIR"
-  timeout "${ITEM_TIMEOUT}s" \
-    claude -p "Process the next item from the triage queue. State directory: $STATE_DIR" \
-      --append-system-prompt "$AGENT_PROMPT" \
-      --allowedTools "${ALLOWED_TOOLS[@]}" \
-      --disallowedTools "Bash(git push:*)" "Bash(git push)" "Bash(gh:*)" \
-      --add-dir "$STATE_DIR" \
-      >> "$LOGFILE" 2>&1 || {
-    EXIT_CODE=$?
-    if [[ "$EXIT_CODE" == "124" ]]; then
-      echo "$(date -Iseconds) Item timed out after ${ITEM_TIMEOUT}s. Skipping." >> "$LOGFILE"
-    else
-      echo "$(date -Iseconds) Claude exited with code $EXIT_CODE." >> "$LOGFILE"
-    fi
-  }
+  claude -p "Process the next item from the triage queue. State directory: $STATE_DIR" \
+    --append-system-prompt "$AGENT_PROMPT" \
+    --allowedTools "${ALLOWED_TOOLS[@]}" \
+    --disallowedTools "Bash(git push:*)" "Bash(git push)" "Bash(gh:*)" \
+    --add-dir "$STATE_DIR" \
+    >> "$LOGFILE" 2>&1
 done
 
 echo "$(date -Iseconds) === Cycle end ===" >> "$LOGFILE"
