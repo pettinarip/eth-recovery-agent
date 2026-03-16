@@ -1,0 +1,13 @@
+{
+  "name": "recovery-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "scripts": {
+    "triage": "node scripts/triage.mjs",
+    "check": "./scripts/check-incidents.sh"
+  }
+}

@@ -13,6 +13,16 @@ fi
 LOGFILE="$AGENT_DIR/agent.log"
 STATE_DIR="$AGENT_DIR/state"
 REPO_DIR="$AGENT_DIR/repo"
+LOCKFILE="$AGENT_DIR/.agent.lock"
+
+# ── Concurrency guard ──
+# Prevent overlapping cron runs. flock exits immediately if lock is held.
+exec 9>"$LOCKFILE"
+if ! flock -n 9; then
+  echo "$(date -Iseconds) Another cycle is still running. Skipping." >> "$LOGFILE"
+  exit 0
+fi
+# Lock is held for the lifetime of this process (fd 9 stays open).
 
 # Sentry project config (change these per-repo)
 export SENTRY_ORG="ethereumorg-ow"
@@ -75,6 +85,8 @@ fi
 echo "$(date -Iseconds) Triage complete: $QUEUE_LEN items queued" >> "$LOGFILE"
 
 # ── Phase 2: Process items one by one (LLM per item) ──
+ITEM_TIMEOUT="${ITEM_TIMEOUT:-600}"  # 10 minutes per item
+
 while true; do
   CYCLE_TIMESTAMP="$(date -Iseconds)"
   export CYCLE_TIMESTAMP
@@ -88,12 +100,20 @@ while true; do
   echo "$(date -Iseconds) $QUEUE_LEN items in queue. Processing next..." >> "$LOGFILE"
 
   cd "$REPO_DIR"
-  claude -p "Process the next item from the triage queue. State directory: $STATE_DIR" \
-    --append-system-prompt "$AGENT_PROMPT" \
-    --allowedTools "${ALLOWED_TOOLS[@]}" \
-    --disallowedTools "Bash(git push:*)" "Bash(git push)" "Bash(gh:*)" \
-    --add-dir "$STATE_DIR" \
-    >> "$LOGFILE" 2>&1
+  timeout "${ITEM_TIMEOUT}s" \
+    claude -p "Process the next item from the triage queue. State directory: $STATE_DIR" \
+      --append-system-prompt "$AGENT_PROMPT" \
+      --allowedTools "${ALLOWED_TOOLS[@]}" \
+      --disallowedTools "Bash(git push:*)" "Bash(git push)" "Bash(gh:*)" \
+      --add-dir "$STATE_DIR" \
+      >> "$LOGFILE" 2>&1 || {
+    EXIT_CODE=$?
+    if [[ "$EXIT_CODE" == "124" ]]; then
+      echo "$(date -Iseconds) Item timed out after ${ITEM_TIMEOUT}s. Skipping." >> "$LOGFILE"
+    else
+      echo "$(date -Iseconds) Claude exited with code $EXIT_CODE." >> "$LOGFILE"
+    fi
+  }
 done
 
 echo "$(date -Iseconds) === Cycle end ===" >> "$LOGFILE"

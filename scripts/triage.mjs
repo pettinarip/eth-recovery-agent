@@ -10,6 +10,7 @@
 
 import { join } from "path"
 import { loadJSON, saveJSON } from "./lib/state.mjs"
+import { sanitizeItem } from "./lib/sanitize.mjs"
 import { fetchSentry } from "./sources/sentry.mjs"
 import { fetchNetlifyLogs } from "./sources/netlify-logs.mjs"
 import { fetchNetlifyFunctionLogs } from "./sources/netlify-function-logs.mjs"
@@ -78,7 +79,10 @@ async function main() {
 
   allCandidates.sort((a, b) => String(a.timestamp || "").localeCompare(String(b.timestamp || "")))
 
-  saveJSON(join(STATE_DIR, "triage-queue.json"), allCandidates)
+  // Sanitize all items before writing to queue (prompt injection mitigation)
+  const sanitized = allCandidates.map(sanitizeItem)
+
+  saveJSON(join(STATE_DIR, "triage-queue.json"), sanitized)
 
   console.error(`Queue: ${allCandidates.length} items to process`)
   if (allCandidates.length > 0) {
