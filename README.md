@@ -30,26 +30,26 @@ Crawler (daily)        ←── file ─────  claude -p (one item per i
 ```
 recovery-agent/
 ├── system-prompt.md          # Agent behavior (injected via --append-system-prompt)
+├── package.json              # Node config + npm scripts (triage, check)
 ├── scripts/
-│   ├── check-incidents.sh    # Cron entry point — runs triage then processes queue
-│   ├── triage.mjs            # Orchestrator — loads sources, writes queue
+│   ├── check-incidents.sh    # Cron entry point — flock guard, triage, process queue
+│   ├── triage.mjs            # Orchestrator — loads sources, sanitizes, writes queue
 │   ├── lib/
-│   │   ├── state.mjs         # loadJSON, saveJSON, autoSkip helpers
-│   │   └── api.mjs           # Sentry and Netlify API client factories
+│   │   ├── state.mjs         # loadJSON, saveJSON (atomic), autoSkip helpers
+│   │   ├── api.mjs           # Sentry and Netlify API client factories
+│   │   └── sanitize.mjs      # Prompt injection sanitization for queue items
 │   └── sources/
 │       ├── sentry.mjs        # Sentry issue fetching + noise detection
 │       ├── netlify-logs.mjs  # Netlify 404 log processing + noise
 │       ├── netlify-function-logs.mjs  # Function logs (WebSocket + file) + noise
 │       └── crawler.mjs       # Crawler findings (passthrough)
 ├── state/                    # Runtime state (gitignored except examples)
-│   ├── acted-on.json         # Tracks processed items (dedup)
+│   ├── acted-on.json         # Tracks processed items (dedup, 30-day TTL)
 │   ├── analysis-output.json  # Analysis results log
 │   ├── triage-queue.json     # Current queue for claude to process
 │   ├── netlify-logs.json     # Netlify 404/error logs
 │   └── netlify-function-logs.txt  # Manually pasted function logs
 ├── repo/                     # Git clone of ethereum-org-website
-├── plan.md                   # Full technical plan
-├── brainstorm.md             # Original brainstorm document
 └── .env                      # Secrets (SENTRY_AUTH_TOKEN, NETLIFY_AUTH_TOKEN, etc.)
 ```
 
@@ -105,6 +105,10 @@ recovery-agent/
 - **Local simulation mode**: No `git push`, no GitHub API calls. All branches and documents stay local.
 - **One item per invocation**: Each error gets its own isolated Claude session with full context budget.
 - **Deterministic pre-filtering**: Noise is filtered before the LLM runs, saving cost and reducing false positives.
+- **Concurrency guard**: `flock` prevents overlapping cron runs from corrupting state.
+- **Atomic writes**: State files use write-to-tmp + rename to prevent partial writes on crash.
+- **Prompt injection sanitization**: Attacker-controlled strings (error titles, stack traces) are scrubbed before reaching the LLM.
+- **Acted-on pruning**: Entries older than 30 days are automatically pruned to prevent unbounded growth.
 - **Kill switch**: Set `RECOVERY_AGENT_ENABLED=false` to stop all processing within one hour.
 
 ## Logs
