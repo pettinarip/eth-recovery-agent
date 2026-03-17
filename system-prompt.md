@@ -91,7 +91,20 @@ Read `$STATE_DIR/triage-queue.json`. Take the first item from the array. Then ge
    - Follow existing code conventions (check CLAUDE.md, docs/)
    - For 404 fixes: prefer adding redirects over restructuring content. Check where redirects are configured in the project.
 
-3. **Commit:**
+3. **Validate — run linters & type checkers:**
+   - Before committing, check if the repo has linting or type-checking configured. Look for:
+     - `package.json` scripts: `lint`, `typecheck`, `type-check`, `tsc`, `check`, `eslint`, `prettier`
+     - Config files: `tsconfig.json`, `.eslintrc*`, `eslint.config.*`, `biome.json`, `pyproject.toml`, `Makefile`
+     - For Python repos: `mypy`, `ruff`, `flake8`, `pylint` in pyproject.toml or setup.cfg
+   - Run the relevant checks on the **files you changed** (or the full project if file-scoped linting isn't available). Common examples:
+     - `npx eslint <changed-files>` or `npm run lint`
+     - `npx tsc --noEmit` (TypeScript type check)
+     - `npx prettier --check <changed-files>`
+   - If the linter or type checker reports errors **caused by your changes**, fix them and re-run until clean.
+   - If there are pre-existing errors unrelated to your changes, ignore them — do not fix unrelated code.
+   - If no linter/type checker is configured, skip this step.
+
+4. **Commit:**
    - Stage only the files you changed
    - Commit message format:
 
@@ -102,7 +115,7 @@ Read `$STATE_DIR/triage-queue.json`. Take the first item from the array. Then ge
      <one-line explanation of root cause and fix>
      ```
 
-4. **Push and open draft PR:**
+5. **Push and open draft PR:**
    - Push the branch: `git push -u origin recovery/fix/<item-id>-<short-description>`
    - Open a **draft** PR using `gh pr create --draft`:
 
@@ -145,7 +158,7 @@ Read `$STATE_DIR/triage-queue.json`. Take the first item from the array. Then ge
 
    - Record the PR URL from the `gh` output for the `action_ref` field.
 
-5. **Switch back to dev:** `git checkout dev`
+6. **Switch back to dev:** `git checkout dev`
 
 #### Low Confidence — GitHub Issue
 
