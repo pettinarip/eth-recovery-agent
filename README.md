@@ -10,13 +10,13 @@ Runs on a VPS with system crontab. No Docker, no framework, no public endpoints.
 Error Sources                          Agent (VPS, cron every hour)
 ─────────────────                      ─────────────────────────────────
 Sentry (ethereum.org)  ←── REST API ── triage.mjs (deterministic filtering)
-Netlify logs           ←── file ─────          ↓
+Grafana (function logs)←── REST API ──         ↓
 Crawler (daily)        ←── file ─────  claude -p (one item per invocation)
                                                ↓
                                        Local branch + PR doc / Issue doc / Skip
 ```
 
-1. **Triage** (`scripts/triage.mjs`) — Orchestrates all enabled sources (Sentry, Netlify logs, Netlify function logs, crawler). Each source module (`scripts/sources/`) handles its own fetching and noise filtering. The orchestrator deduplicates against `state/acted-on.json` and writes an ordered queue to `state/triage-queue.json`.
+1. **Triage** (`scripts/triage.mjs`) — Orchestrates all enabled sources (Sentry, Grafana function logs, crawler). Each source module (`scripts/sources/`) handles its own fetching and noise filtering. The orchestrator deduplicates against `state/acted-on.json` and writes an ordered queue to `state/triage-queue.json`.
 
 2. **Analysis** (`claude -p`) — For each queued item, a fully isolated Claude Code invocation analyzes the error against the full codebase. Classifies confidence as high, low, or none.
 
@@ -36,21 +36,18 @@ recovery-agent/
 │   ├── triage.mjs            # Orchestrator — loads sources, sanitizes, writes queue
 │   ├── lib/
 │   │   ├── state.mjs         # loadJSON, saveJSON (atomic), autoSkip helpers
-│   │   ├── api.mjs           # Sentry and Netlify API client factories
+│   │   ├── api.mjs           # Sentry and Grafana API client factories
 │   │   └── sanitize.mjs      # Prompt injection sanitization for queue items
 │   └── sources/
 │       ├── sentry.mjs        # Sentry issue fetching + noise detection
-│       ├── netlify-logs.mjs  # Netlify 404 log processing + noise
-│       ├── netlify-function-logs.mjs  # Function logs (WebSocket + file) + noise
+│       ├── grafana-logs.mjs  # Grafana function log fetching (WARN/ERROR) + noise
 │       └── crawler.mjs       # Crawler findings (passthrough)
 ├── state/                    # Runtime state (gitignored except examples)
 │   ├── acted-on.json         # Tracks processed items (dedup, 30-day TTL)
 │   ├── analysis-output.json  # Analysis results log
-│   ├── triage-queue.json     # Current queue for claude to process
-│   ├── netlify-logs.json     # Netlify 404/error logs
-│   └── netlify-function-logs.txt  # Manually pasted function logs
+│   └── triage-queue.json     # Current queue for claude to process
 ├── repo/                     # Git clone of ethereum-org-website
-└── .env                      # Secrets (SENTRY_AUTH_TOKEN, NETLIFY_AUTH_TOKEN, etc.)
+└── .env                      # Secrets (SENTRY_AUTH_TOKEN, GRAFANA_TOKEN, etc.)
 ```
 
 ## Setup
@@ -95,9 +92,10 @@ recovery-agent/
 | `ANTHROPIC_API_KEY` | Anthropic API key for Claude | — |
 | `SENTRY_ORG` | Sentry organization slug | `ethereumorg-ow` |
 | `SENTRY_PROJECT` | Sentry project slug | `ethorg` |
-| `NETLIFY_AUTH_TOKEN` | Netlify API token for function log fetching | — |
-| `NETLIFY_SITE_ID` | Netlify site ID for function log fetching | — |
-| `ENABLED_SOURCES` | Comma-separated sources to enable | `sentry,netlify-logs,netlify-function-logs,crawler` |
+| `GRAFANA_URL` | Grafana instance base URL | — |
+| `GRAFANA_TOKEN` | Grafana service account token (`glsa_...`) | — |
+| `GRAFANA_DATASOURCE_UID` | Elasticsearch datasource UID in Grafana | — |
+| `ENABLED_SOURCES` | Comma-separated sources to enable | `sentry,grafana-logs,crawler` |
 | `RECOVERY_AGENT_ENABLED` | Kill switch — set to `false` to disable | `true` |
 
 ## Safety

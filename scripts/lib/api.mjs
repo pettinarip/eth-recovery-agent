@@ -18,21 +18,26 @@ export function createSentryAPI(authToken) {
   }
 }
 
-export function createNetlifyAPI(authToken) {
-  return async function netlifyAPI(endpoint) {
-    const url = `https://api.netlify.com/api/v1/${endpoint}`
+export function createGrafanaAPI(baseUrl, token) {
+  return async function grafanaAPI(endpoint, { method = "GET", body } = {}) {
+    const url = `${baseUrl}/api/${endpoint}`
     try {
       const res = await fetch(url, {
-        headers: { Authorization: `Bearer ${authToken}` },
+        method,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: body ? JSON.stringify(body) : undefined,
         signal: AbortSignal.timeout(30_000),
       })
       if (!res.ok) {
-        console.error(`  Netlify API error: ${res.status} ${res.statusText} for ${endpoint}`)
+        console.error(`  Grafana API error: ${res.status} ${res.statusText} for ${endpoint}`)
         return null
       }
       return await res.json()
     } catch (e) {
-      console.error(`  Netlify API error: ${e.message} for ${endpoint}`)
+      console.error(`  Grafana API error: ${e.message} for ${endpoint}`)
       return null
     }
   }

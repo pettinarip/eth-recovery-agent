@@ -12,13 +12,12 @@ import { join } from "path"
 import { loadJSON, saveJSON } from "./lib/state.mjs"
 import { sanitizeItem } from "./lib/sanitize.mjs"
 import { fetchSentry } from "./sources/sentry.mjs"
-import { fetchNetlifyLogs } from "./sources/netlify-logs.mjs"
-import { fetchNetlifyFunctionLogs } from "./sources/netlify-function-logs.mjs"
+import { fetchGrafanaLogs } from "./sources/grafana-logs.mjs"
 import { fetchCrawlerFindings } from "./sources/crawler.mjs"
 
 const STATE_DIR = process.env.STATE_DIR
 const CYCLE_TIMESTAMP = process.env.CYCLE_TIMESTAMP
-const ENABLED_SOURCES = (process.env.ENABLED_SOURCES || "sentry,netlify-logs,netlify-function-logs,crawler").split(",")
+const ENABLED_SOURCES = (process.env.ENABLED_SOURCES || "sentry,grafana-logs,crawler").split(",")
 
 if (!STATE_DIR) {
   console.error("STATE_DIR is required")
@@ -64,15 +63,10 @@ async function main() {
       actedOn,
       cycleTimestamp: CYCLE_TIMESTAMP,
     }),
-    "netlify-logs": () => fetchNetlifyLogs({
-      stateDir: STATE_DIR,
-      actedOn,
-      cycleTimestamp: CYCLE_TIMESTAMP,
-    }),
-    "netlify-function-logs": () => fetchNetlifyFunctionLogs({
-      stateDir: STATE_DIR,
-      authToken: process.env.NETLIFY_AUTH_TOKEN || "",
-      siteId: process.env.NETLIFY_SITE_ID || "",
+    "grafana-logs": () => fetchGrafanaLogs({
+      grafanaUrl: process.env.GRAFANA_URL || "",
+      grafanaToken: process.env.GRAFANA_TOKEN || "",
+      datasourceUid: process.env.GRAFANA_DATASOURCE_UID || "",
       actedOn,
       cycleTimestamp: CYCLE_TIMESTAMP,
     }),

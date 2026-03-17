@@ -24,8 +24,8 @@ Items have been pre-filtered by the triage script — noise items (bot probes, 4
 
 ```json
 {
-  "id": "string (Sentry short ID like ETHORG-XX, or netlify-404-<slug>, or crawler ID)",
-  "source": "sentry | netlify-logs | crawler",
+  "id": "string (Sentry short ID like ETHORG-XX, or grafana-fn-<slug>, or crawler ID)",
+  "source": "sentry | grafana-logs | crawler",
   "title": "string",
   "timestamp": "ISO 8601 (first seen)",
   ...source-specific fields
@@ -45,9 +45,8 @@ get_issue_details(organizationSlug: <SENTRY_ORG>, issueId: "<item id>")
 
 Use `search_issue_events` if you need additional event data beyond what `get_issue_details` provides.
 
-**For Netlify log entries:** The item includes `path`, `status`, and `hit_count`. Analyze the path against the codebase.
+**For Grafana function log entries:** The item includes `level` (WARN/ERROR), `message`, `stack` (full stack trace), `request_id`, and `hit_count`. These are runtime errors from serverless function execution (Next.js SSR, API routes, server actions) ingested via Grafana. Analyze the error message and stack trace against the codebase. Look for:
 
-**For Netlify function log entries:** The item includes `level` (WARN/ERROR), `message`, `stack` (full stack trace), `request_id`, and `hit_count`. These are runtime errors from Netlify serverless function execution (Next.js SSR, API routes, server actions). Analyze the error message and stack trace against the codebase. Look for:
 - Application code frames in the stack trace (paths under `/var/task/.next/server/app/` reference built pages)
 - The error type and message to understand root cause
 - Whether the error is transient (stale deployment) or persistent (code bug)
@@ -70,11 +69,11 @@ Read `$STATE_DIR/triage-queue.json`. Take the first item from the array. Then ge
 
 ### 3. Classify Confidence
 
-| Confidence | Criteria                                                                                            | Action                       |
-| ---------- | --------------------------------------------------------------------------------------------------- | ---------------------------- |
-| **high**   | Root cause identified, fix is straightforward (missing redirect, broken link, typo, wrong import)   | Push branch + open draft PR  |
-| **low**    | Root cause partially identified but fix is complex, risky, or involves architectural changes        | Open GitHub issue            |
-| **none**   | Bot probe, client error, stale cache, spam path, already fixed, or not actionable                   | Log and skip                 |
+| Confidence | Criteria                                                                                          | Action                      |
+| ---------- | ------------------------------------------------------------------------------------------------- | --------------------------- |
+| **high**   | Root cause identified, fix is straightforward (missing redirect, broken link, typo, wrong import) | Push branch + open draft PR |
+| **low**    | Root cause partially identified but fix is complex, risky, or involves architectural changes      | Open GitHub issue           |
+| **none**   | Bot probe, client error, stale cache, spam path, already fixed, or not actionable                 | Log and skip                |
 
 ### 4. Take Action
 
@@ -130,7 +129,7 @@ Read `$STATE_DIR/triage-queue.json`. Take the first item from the array. Then ge
 
      ## Error Context
 
-     - **Source:** <sentry | netlify-logs | crawler>
+     - **Source:** <sentry | grafana-logs | crawler>
      - **Item ID:** <item-id>
      - **Path/URL:** <affected path or URL>
      - **Status:** <HTTP status code, if applicable>
@@ -171,7 +170,7 @@ gh issue create \
   --body "$(cat <<'ISSEOF'
 ## Error Summary
 
-- **Source:** <sentry | netlify-logs | crawler>
+- **Source:** <sentry | grafana-logs | crawler>
 - **Item ID:** <item-id>
 - **Path/URL:** <affected path or URL>
 - **Status:** <HTTP status code, if applicable>
@@ -213,7 +212,7 @@ Append to `$STATE_DIR/analysis-output.json`. The file is a JSON array. Each entr
 
 ```json
 {
-  "source": "sentry | netlify-logs | crawler",
+  "source": "sentry | grafana-logs | crawler",
   "item_id": "string",
   "title": "string",
   "url": "affected page URL/path or null",

@@ -28,12 +28,13 @@ fi
 export SENTRY_ORG="ethereumorg-ow"
 export SENTRY_PROJECT="ethorg"
 
-# Netlify config (for function log fetching)
-export NETLIFY_AUTH_TOKEN="${NETLIFY_AUTH_TOKEN:-}"
-export NETLIFY_SITE_ID="${NETLIFY_SITE_ID:-}"
+# Grafana config (for function log fetching)
+export GRAFANA_URL="${GRAFANA_URL:-}"
+export GRAFANA_TOKEN="${GRAFANA_TOKEN:-}"
+export GRAFANA_DATASOURCE_UID="${GRAFANA_DATASOURCE_UID:-}"
 
-# Error sources to enable (comma-separated: sentry,netlify-logs,crawler)
-export ENABLED_SOURCES="${ENABLED_SOURCES:-sentry,netlify-logs,netlify-function-logs,crawler}"
+# Error sources to enable (comma-separated: sentry,grafana-logs,crawler)
+export ENABLED_SOURCES="${ENABLED_SOURCES:-sentry,grafana-logs,crawler}"
 
 # Kill switch
 if [[ "${RECOVERY_AGENT_ENABLED:-true}" != "true" ]]; then
