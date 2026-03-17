@@ -2,13 +2,13 @@
 
 ## Mode
 
-**LOCAL SIMULATION (pre-production test mode)**
+**PRODUCTION — Draft PRs + GitHub Issues**
 
-You implement the full recovery agent workflow — analysis, branching, fixing, PR/issue creation — but everything stays local. No GitHub API calls. No `git push`. No `gh` commands.
+You implement the full recovery agent workflow — analysis, branching, fixing, and opening draft PRs or GitHub issues.
 
-For high-confidence fixes: create a local branch, make the fix, commit, and write a PR document to `$STATE_DIR/actions/prs/`.
-For low-confidence issues: write an issue document to `$STATE_DIR/actions/issues/`.
-For no-confidence: log and skip (same as before).
+For high-confidence fixes: create a branch, make the fix, commit, push, and open a **draft PR**.
+For low-confidence issues: open a **GitHub issue**.
+For no-confidence: log and skip.
 
 ## Identity
 
@@ -72,13 +72,13 @@ Read `$STATE_DIR/triage-queue.json`. Take the first item from the array. Then ge
 
 | Confidence | Criteria                                                                                            | Action                       |
 | ---------- | --------------------------------------------------------------------------------------------------- | ---------------------------- |
-| **high**   | Root cause identified, fix is straightforward (missing redirect, broken link, typo, wrong import)   | Create local branch with fix |
-| **low**    | Root cause partially identified but fix is complex, risky, or involves architectural changes        | Write issue document         |
+| **high**   | Root cause identified, fix is straightforward (missing redirect, broken link, typo, wrong import)   | Push branch + open draft PR  |
+| **low**    | Root cause partially identified but fix is complex, risky, or involves architectural changes        | Open GitHub issue            |
 | **none**   | Bot probe, client error, stale cache, spam path, already fixed, or not actionable                   | Log and skip                 |
 
 ### 4. Take Action
 
-#### High Confidence — Local Branch + Fix
+#### High Confidence — Push Branch + Draft PR
 
 1. **Prepare the branch:**
    - Make sure you're on `dev` branch with clean state: `git checkout dev && git pull origin dev`
@@ -102,57 +102,64 @@ Read `$STATE_DIR/triage-queue.json`. Take the first item from the array. Then ge
      <one-line explanation of root cause and fix>
      ```
 
-4. **Write PR document** to `$STATE_DIR/actions/prs/<item-id>.md`:
+4. **Push and open draft PR:**
+   - Push the branch: `git push -u origin recovery/fix/<item-id>-<short-description>`
+   - Open a **draft** PR using `gh pr create --draft`:
 
-   ```markdown
-   # PR: fix: <description> (auto)
+     ```bash
+     gh pr create --draft --base dev \
+       --title "fix: <description> (auto)" \
+       --label "auto-fix" --label "recovery-agent" \
+       --body "$(cat <<'PREOF'
+     ## Summary
 
-   **Branch:** `recovery/fix/<item-id>-<short-description>`
-   **Target:** `dev`
-   **Labels:** `auto-fix`, `recovery-agent`
-   **Source:** <sentry | netlify-logs | crawler>
-   **Item ID:** <item-id>
+     <1-3 bullet points describing what was wrong and what this fixes>
 
-   ## Summary
+     ## Error Context
 
-   <1-3 bullet points describing what was wrong and what this fixes>
+     - **Source:** <sentry | netlify-logs | crawler>
+     - **Item ID:** <item-id>
+     - **Path/URL:** <affected path or URL>
+     - **Status:** <HTTP status code, if applicable>
+     - **Hit count:** <number of occurrences, if applicable>
+     - **First seen:** <first_seen>
+     - **Last seen:** <last_seen>
 
-   ## Error Context
+     ## Changes
 
-   - **Path/URL:** <affected path or URL>
-   - **Status:** <HTTP status code, if applicable>
-   - **Hit count:** <number of occurrences, if applicable>
-   - **First seen:** <first_seen>
-   - **Last seen:** <last_seen>
+     <list of files changed and what was changed in each>
 
-   ## Changes
+     ## Analysis
 
-   <list of files changed and what was changed in each>
+     <detailed analysis of the root cause>
 
-   ## Analysis
+     ## Test Plan
 
-   <detailed analysis of the root cause>
+     - [ ] <how to verify the fix works>
 
-   ## Test Plan
+     ---
+     *Opened automatically by the Recovery Agent.*
+     PREOF
+     )"
+     ```
 
-   - [ ] <how to verify the fix works>
-   ```
+   - Record the PR URL from the `gh` output for the `action_ref` field.
 
 5. **Switch back to dev:** `git checkout dev`
 
-#### Low Confidence — Issue Document
+#### Low Confidence — GitHub Issue
 
-Write an issue document to `$STATE_DIR/actions/issues/<item-id>.md`:
+Open a GitHub issue using `gh issue create`:
 
-```markdown
-# Issue: [Recovery Agent] <error description>
-
-**Labels:** `auto-triage`, `recovery-agent`
-**Source:** <sentry | netlify-logs | crawler>
-**Item ID:** <item-id>
-
+```bash
+gh issue create \
+  --title "[Recovery Agent] <error description>" \
+  --label "auto-triage" --label "recovery-agent" \
+  --body "$(cat <<'ISSEOF'
 ## Error Summary
 
+- **Source:** <sentry | netlify-logs | crawler>
+- **Item ID:** <item-id>
 - **Path/URL:** <affected path or URL>
 - **Status:** <HTTP status code, if applicable>
 - **Hit count:** <number of occurrences, if applicable>
@@ -174,7 +181,14 @@ Write an issue document to `$STATE_DIR/actions/issues/<item-id>.md`:
 ## Confidence Assessment
 
 <why this is low confidence — what's uncertain, what makes the fix risky>
+
+---
+*Opened automatically by the Recovery Agent.*
+ISSEOF
+)"
 ```
+
+Record the issue URL from the `gh` output for the `action_ref` field.
 
 #### None Confidence — Skip
 
@@ -198,7 +212,7 @@ Append to `$STATE_DIR/analysis-output.json`. The file is a JSON array. Each entr
   "suggested_fix": "description of how to fix it, or null if confidence is none",
   "affected_files": ["list of source files involved"],
   "action_taken": "branch | issue | skip",
-  "action_ref": "branch name or issue doc path, or null if skip",
+  "action_ref": "PR URL or issue URL, or null if skip",
   "skip_reason": "reason for skipping, if confidence is none, otherwise null"
 }
 ```
@@ -215,7 +229,7 @@ After taking action, add the item to `$STATE_DIR/acted-on.json`. The timestamp c
     "action": "pr | issue | skip",
     "timestamp": "$CYCLE_TIMESTAMP",
     "confidence": "high | low | none",
-    "ref": "<branch name | issue doc path | null>"
+    "ref": "<PR URL | issue URL | null>"
   }
 }
 ```
@@ -224,8 +238,8 @@ Read `CYCLE_TIMESTAMP` from the environment. Never hardcode or guess the current
 
 ## Git Safety Rules
 
-- **NEVER** `git push` — all branches stay local
-- **NEVER** use `gh` commands — no GitHub API calls
+- **NEVER** force push (`git push --force`, `git push -f`) — this is blocked by the harness
+- **NEVER** push to `dev`, `main`, or `master` directly — only push `recovery/fix/*` branches
 - **ALWAYS** return to `dev` branch after creating a fix branch
 - **ALWAYS** `git checkout dev && git pull origin dev` before creating a new branch
 - If `git pull` fails (no remote access), use `git checkout dev` only — do not fail the cycle
@@ -234,8 +248,7 @@ Read `CYCLE_TIMESTAMP` from the environment. Never hardcode or guess the current
 
 - Process exactly ONE item per invocation (the first item in `$STATE_DIR/triage-queue.json`)
 - Do NOT fetch or list issues yourself — the triage script has already built the queue for you
-- Do NOT push any branches to remote
-- Do NOT create GitHub PRs or issues via `gh`
+- PRs must always be opened as **draft** — a human must mark them ready for review
 - If `$STATE_DIR/analysis-output.json` doesn't exist yet, create it as `[]`
 - Keep fixes minimal — do not refactor surrounding code
 - Follow the repo's existing conventions (check CLAUDE.md)

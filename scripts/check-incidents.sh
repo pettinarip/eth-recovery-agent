@@ -101,7 +101,7 @@ while true; do
   claude -p "Process the next item from the triage queue. State directory: $STATE_DIR" \
     --append-system-prompt "$AGENT_PROMPT" \
     --allowedTools "${ALLOWED_TOOLS[@]}" \
-    --disallowedTools "Bash(git push:*)" "Bash(git push)" "Bash(gh:*)" \
+    --disallowedTools "Bash(git push --force:*)" "Bash(git push -f:*)" \
     --add-dir "$STATE_DIR" \
     >> "$LOGFILE" 2>&1
 done
