@@ -18,16 +18,18 @@ export function createSentryAPI(authToken) {
   }
 }
 
-export function createGrafanaAPI(baseUrl, token) {
+export function createGrafanaAPI(baseUrl, token, orgId) {
   return async function grafanaAPI(endpoint, { method = "GET", body } = {}) {
     const url = `${baseUrl}/api/${endpoint}`
     try {
+      const headers = {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      }
+      if (orgId) headers["X-Grafana-Org-Id"] = String(orgId)
       const res = await fetch(url, {
         method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+        headers,
         body: body ? JSON.stringify(body) : undefined,
         signal: AbortSignal.timeout(30_000),
       })

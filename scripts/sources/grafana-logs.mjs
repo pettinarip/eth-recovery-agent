@@ -28,6 +28,11 @@ function parseFrames(frames) {
       for (let col = 0; col < fieldNames.length; col++) {
         row[fieldNames[col]] = columns[col][i]
       }
+      // VictoriaMetrics Logs nests metadata inside a `labels` JSON object — flatten it
+      if (row.labels && typeof row.labels === "object") {
+        Object.assign(row, row.labels)
+        delete row.labels
+      }
       logs.push(row)
     }
   }
@@ -35,9 +40,8 @@ function parseFrames(frames) {
 }
 
 export async function fetchGrafanaLogs({
-  grafanaUrl, grafanaToken, datasourceUid,
-  // These field names may need adjustment after inspecting the actual Grafana instance
-  timeField = "@timestamp", levelField = "level", messageField = "message",
+  grafanaUrl, grafanaToken, datasourceUid, grafanaOrgId,
+  levelField = "level", messageField = "message",
   actedOn, cycleTimestamp,
 }) {
   if (!grafanaUrl || !grafanaToken || !datasourceUid) {
@@ -45,19 +49,16 @@ export async function fetchGrafanaLogs({
     return { candidates: [], skipped: 0 }
   }
 
-  const grafanaAPI = createGrafanaAPI(grafanaUrl, grafanaToken)
+  const grafanaAPI = createGrafanaAPI(grafanaUrl, grafanaToken, grafanaOrgId)
   const result = await grafanaAPI("ds/query", {
     method: "POST",
     body: {
       queries: [{
         refId: "A",
-        datasource: { type: "elasticsearch", uid: datasourceUid },
-        query: `${levelField}:WARN OR ${levelField}:ERROR`,
-        timeField,
-        metrics: [{ id: "1", type: "logs" }],
-        bucketAggs: [],
-        maxDataPoints: 500,
-        intervalMs: 1000,
+        datasource: { type: "victoriametrics-logs-datasource", uid: datasourceUid },
+        expr: `_time:[now-1h, now] AND (${levelField}:WARN OR ${levelField}:ERROR)`,
+        queryType: "logs",
+        maxLines: 500,
       }],
       from: "now-1h",
       to: "now",
@@ -72,13 +73,12 @@ export async function fetchGrafanaLogs({
   const rawLogs = parseFrames(result.results.A.frames)
   console.error(`  Grafana: ${rawLogs.length} WARN/ERROR entries from last hour`)
 
-  // Normalize field names (adjust mapping after discovery)
   const logs = rawLogs.map((row) => ({
     level: (row[levelField] || row.level || "ERROR").toUpperCase(),
-    message: row[messageField] || row.line || row.Message || "",
+    message: row[messageField] || row.Line || row.line || row.Message || "",
     stack: row.stack || row.stacktrace || "",
     request_id: row.request_id || row.trace_id || "",
-    timestamp: row[timeField] || "",
+    timestamp: row._time || row.Time || row.timestamp || "",
     function_name: row.function_name || row.service || "",
   }))
 

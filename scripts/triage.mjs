@@ -67,6 +67,7 @@ async function main() {
       grafanaUrl: process.env.GRAFANA_URL || "",
       grafanaToken: process.env.GRAFANA_TOKEN || "",
       datasourceUid: process.env.GRAFANA_DATASOURCE_UID || "",
+      grafanaOrgId: process.env.GRAFANA_ORG_ID || "",
       actedOn,
       cycleTimestamp: CYCLE_TIMESTAMP,
     }),
