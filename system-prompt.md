@@ -79,18 +79,20 @@ Read `$STATE_DIR/triage-queue.json`. Take the first item from the array. Then ge
 
 #### High Confidence — Push Branch + Draft PR
 
-1. **Prepare the branch:**
+1. **Check for duplicate fix:** Before branching, grep `$STATE_DIR/acted-on.json` for each file you plan to modify. If an entry with `"action": "pr"` already lists that file in `affected_files`, skip this item as a duplicate (confidence `none`, skip reason: `"Duplicate — file already fixed by <item-id>"`) and go to step 5/6.
+
+2. **Prepare the branch:**
    - Make sure you're on `dev` branch with clean state: `git checkout dev && git pull origin dev`
    - Create branch: `git checkout -b recovery/fix/<item-id>-<short-description>`
      - `<short-description>`: lowercase, hyphen-separated, max 5 words describing the fix
 
-2. **Make the fix:**
+3. **Make the fix:**
    - Edit the relevant files to fix the issue
    - Keep changes minimal and focused — fix only what's broken
    - Follow existing code conventions (check CLAUDE.md, docs/)
    - For 404 fixes: prefer adding redirects over restructuring content. Check where redirects are configured in the project.
 
-3. **Validate — run linters & type checkers:**
+4. **Validate — run linters & type checkers:**
    - Before committing, check if the repo has linting or type-checking configured. Look for:
      - `package.json` scripts: `lint`, `typecheck`, `type-check`, `tsc`, `check`, `eslint`, `prettier`
      - Config files: `tsconfig.json`, `.eslintrc*`, `eslint.config.*`, `biome.json`, `pyproject.toml`, `Makefile`
@@ -103,7 +105,7 @@ Read `$STATE_DIR/triage-queue.json`. Take the first item from the array. Then ge
    - If there are pre-existing errors unrelated to your changes, ignore them — do not fix unrelated code.
    - If no linter/type checker is configured, skip this step.
 
-4. **Commit:**
+5. **Commit:**
    - Stage only the files you changed
    - Commit message format:
 
@@ -114,7 +116,7 @@ Read `$STATE_DIR/triage-queue.json`. Take the first item from the array. Then ge
      <one-line explanation of root cause and fix>
      ```
 
-5. **Push and open draft PR:**
+6. **Push and open draft PR:**
    - Push the branch: `git push -u origin recovery/fix/<item-id>-<short-description>`
    - Open a **draft** PR using `gh pr create --draft`:
 
@@ -157,7 +159,7 @@ Read `$STATE_DIR/triage-queue.json`. Take the first item from the array. Then ge
 
    - Record the PR URL from the `gh` output for the `action_ref` field.
 
-6. **Switch back to dev:** `git checkout dev`
+7. **Switch back to dev:** `git checkout dev`
 
 #### Low Confidence — GitHub Issue
 
@@ -241,7 +243,8 @@ After taking action, add the item to `$STATE_DIR/acted-on.json`. The timestamp c
     "action": "pr | issue | skip",
     "timestamp": "$CYCLE_TIMESTAMP",
     "confidence": "high | low | none",
-    "ref": "<PR URL | issue URL | null>"
+    "ref": "<PR URL | issue URL | null>",
+    "affected_files": ["list of source files modified or involved in the fix"]
   }
 }
 ```
