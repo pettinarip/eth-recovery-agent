@@ -18,6 +18,29 @@ export function createSentryAPI(authToken) {
   }
 }
 
+export function createTriggerDevAPI(apiKey) {
+  return async function triggerDevAPI(endpoint) {
+    const url = `https://api.trigger.dev/${endpoint}`
+    try {
+      const res = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        signal: AbortSignal.timeout(30_000),
+      })
+      if (!res.ok) {
+        console.error(`  Trigger.dev API error: ${res.status} ${res.statusText} for ${endpoint}`)
+        return null
+      }
+      return await res.json()
+    } catch (e) {
+      console.error(`  Trigger.dev API error: ${e.message} for ${endpoint}`)
+      return null
+    }
+  }
+}
+
 export function createGrafanaAPI(baseUrl, token, orgId) {
   return async function grafanaAPI(endpoint, { method = "GET", body } = {}) {
     const url = `${baseUrl}/api/${endpoint}`

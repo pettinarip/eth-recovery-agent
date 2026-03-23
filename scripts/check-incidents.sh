@@ -33,8 +33,12 @@ export GRAFANA_URL="${GRAFANA_URL:-}"
 export GRAFANA_TOKEN="${GRAFANA_TOKEN:-}"
 export GRAFANA_DATASOURCE_UID="${GRAFANA_DATASOURCE_UID:-}"
 
-# Error sources to enable (comma-separated: sentry,grafana-logs,crawler)
-export ENABLED_SOURCES="${ENABLED_SOURCES:-sentry,grafana-logs,crawler}"
+# Trigger.dev config (for data layer task monitoring)
+export TRIGGER_DEV_API_KEY="${TRIGGER_DEV_API_KEY:-}"
+export TRIGGER_DEV_PROJECT_REF="${TRIGGER_DEV_PROJECT_REF:-}"
+
+# Error sources to enable (comma-separated: sentry,grafana-logs,crawler,trigger-dev)
+export ENABLED_SOURCES="${ENABLED_SOURCES:-sentry,grafana-logs,crawler,trigger-dev}"
 
 # Kill switch
 if [[ "${RECOVERY_AGENT_ENABLED:-true}" != "true" ]]; then
@@ -63,6 +67,9 @@ trap cleanup INT TERM
 ALLOWED_TOOLS=("Bash()" "Read()" "Write()" "Edit()" "Glob()" "Grep()")
 if [[ "$ENABLED_SOURCES" == *"sentry"* ]]; then
   ALLOWED_TOOLS+=("mcp__sentry()")
+fi
+if [[ "$ENABLED_SOURCES" == *"trigger-dev"* ]]; then
+  ALLOWED_TOOLS+=("mcp__trigger()")
 fi
 
 echo "$(date -Iseconds) === Cycle start (sources: $ENABLED_SOURCES) ===" >> "$LOGFILE"

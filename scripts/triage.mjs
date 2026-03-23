@@ -14,6 +14,7 @@ import { sanitizeItem } from "./lib/sanitize.mjs"
 import { fetchSentry } from "./sources/sentry.mjs"
 import { fetchGrafanaLogs } from "./sources/grafana-logs.mjs"
 import { fetchCrawlerFindings } from "./sources/crawler.mjs"
+import { fetchTriggerDev } from "./sources/trigger-dev.mjs"
 
 const STATE_DIR = process.env.STATE_DIR
 const CYCLE_TIMESTAMP = process.env.CYCLE_TIMESTAMP
@@ -74,6 +75,14 @@ async function main() {
     crawler: () => fetchCrawlerFindings({
       stateDir: STATE_DIR,
       actedOn,
+    }),
+    "trigger-dev": () => fetchTriggerDev({
+      apiKey: process.env.TRIGGER_DEV_API_KEY || "",
+      projectRef: process.env.TRIGGER_DEV_PROJECT_REF || "",
+      environment: process.env.TRIGGER_DEV_ENVIRONMENT || "prod",
+      lookbackHours: parseInt(process.env.TRIGGER_DEV_LOOKBACK_HOURS || "24"),
+      actedOn,
+      cycleTimestamp: CYCLE_TIMESTAMP,
     }),
   }
 

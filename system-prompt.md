@@ -51,6 +51,12 @@ Use `search_issue_events` if you need additional event data beyond what `get_iss
 - The error type and message to understand root cause
 - Whether the error is transient (stale deployment) or persistent (code bug)
 
+**For Trigger.dev task failures:** The item includes `task` (task identifier), `error_message`, `error_stack`, `attempts` (retry count for a single run), `failed_runs_24h` (how many times this task failed with this error in the last 24 hours), and `dashboard_url`. These are data layer tasks (fetchers, scheduled jobs) that run on Trigger.dev. Use `mcp__trigger__get_run_details` with the `run_id` from the item to get full trace details. Key considerations:
+
+- `failed_runs_24h` is critical: a single failure may be transient, but repeated failures (e.g. 10+) indicate a persistent problem that needs investigation — at minimum open an issue.
+- External API errors (rate limits, timeouts) are NOT "noise" if they happen repeatedly — they indicate the fetcher needs adjustment (backoff, caching, API key rotation, alternative endpoint).
+- Check the fetcher source code to understand what the task does and whether there's a code-level mitigation.
+
 **For Crawler findings:** The item includes the broken resource details. Analyze against the codebase.
 
 ## Processing Workflow
@@ -72,8 +78,8 @@ Read `$STATE_DIR/triage-queue.json`. Take the first item from the array. Then ge
 | Confidence | Criteria                                                                                          | Action                      |
 | ---------- | ------------------------------------------------------------------------------------------------- | --------------------------- |
 | **high**   | Root cause identified, fix is straightforward (missing redirect, broken link, typo, wrong import) | Push branch + open draft PR |
-| **low**    | Root cause partially identified but fix is complex, risky, or involves architectural changes      | Open GitHub issue           |
-| **none**   | Bot probe, client error, stale cache, spam path, already fixed, or not actionable                 | Log and skip                |
+| **low**    | Root cause partially identified but fix is complex, risky, or involves architectural changes. Also: persistent external failures (repeated rate limits, API errors) that need investigation even if not a direct code bug. | Open GitHub issue           |
+| **none**   | Bot probe, client error, stale cache, spam path, already fixed, or single transient failure       | Log and skip                |
 
 ### 4. Take Action
 
