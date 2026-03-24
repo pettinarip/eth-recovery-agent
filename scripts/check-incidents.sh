@@ -37,6 +37,9 @@ export GRAFANA_DATASOURCE_UID="${GRAFANA_DATASOURCE_UID:-}"
 export TRIGGER_DEV_API_KEY="${TRIGGER_DEV_API_KEY:-}"
 export TRIGGER_DEV_PROJECT_REF="${TRIGGER_DEV_PROJECT_REF:-}"
 
+# Discord webhook for notifications
+export DISCORD_WEBHOOK_URL="${DISCORD_WEBHOOK_URL:-}"
+
 # Error sources to enable (comma-separated: sentry,grafana-logs,crawler,trigger-dev)
 export ENABLED_SOURCES="${ENABLED_SOURCES:-sentry,grafana-logs,crawler,trigger-dev}"
 
@@ -112,6 +115,9 @@ while true; do
     --disallowedTools "Bash(git push --force:*)" "Bash(git push -f:*)" \
     --add-dir "$STATE_DIR" \
     >> "$LOGFILE" 2>&1
+
+  # Send Discord notification if the agent created a PR or issue
+  node "$AGENT_DIR/scripts/notify-discord.mjs" 2>> "$LOGFILE" || true
 done
 
 echo "$(date -Iseconds) === Cycle end ===" >> "$LOGFILE"
