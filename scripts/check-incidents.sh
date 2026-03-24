@@ -108,13 +108,49 @@ while true; do
 
   echo "$(date -Iseconds) $QUEUE_LEN items in queue. Processing next..." >> "$LOGFILE"
 
+  # Snapshot analysis-output.json length before claude runs
+  ANALYSIS_FILE="$STATE_DIR/analysis-output.json"
+  PREV_LEN=0
+  if [[ -f "$ANALYSIS_FILE" ]]; then
+    PREV_LEN=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$ANALYSIS_FILE','utf-8')).length)" 2>/dev/null || echo 0)
+  fi
+
+  # Capture claude output to temp file
+  CLAUDE_OUT=$(mktemp)
   cd "$REPO_DIR"
   claude -p "Process the next item from the triage queue. State directory: $STATE_DIR" \
     --append-system-prompt "$AGENT_PROMPT" \
     --allowedTools "${ALLOWED_TOOLS[@]}" \
     --disallowedTools "Bash(git push --force:*)" "Bash(git push -f:*)" \
     --add-dir "$STATE_DIR" \
-    >> "$LOGFILE" 2>&1
+    > "$CLAUDE_OUT" 2>&1
+
+  # Extract summary from analysis-output.json (the structured result)
+  SUMMARY=$(node -e "
+    const fs = require('fs');
+    try {
+      const entries = JSON.parse(fs.readFileSync('$ANALYSIS_FILE', 'utf-8'));
+      if (entries.length > $PREV_LEN) {
+        const e = entries[entries.length - 1];
+        const action = e.action_taken === 'branch' ? 'PR' : e.action_taken === 'issue' ? 'ISSUE' : 'SKIP';
+        const ref = e.action_ref ? ' -> ' + e.action_ref : '';
+        const reason = e.skip_reason || e.analysis || '';
+        const short = reason.length > 120 ? reason.slice(0, 120) + '...' : reason;
+        console.log(action + ' ' + e.item_id + ' [' + e.confidence + ']' + ref + ' | ' + short);
+      } else {
+        console.log('(no analysis entry written)');
+      }
+    } catch(e) { console.log('(analysis read error: ' + e.message + ')'); }
+  " 2>/dev/null || echo "(summary extraction failed)")
+
+  echo "$(date -Iseconds) >> $SUMMARY" >> "$LOGFILE"
+
+  # Append raw claude output indented for reference
+  if [[ -s "$CLAUDE_OUT" ]]; then
+    sed 's/^/    /' "$CLAUDE_OUT" >> "$LOGFILE"
+    echo "" >> "$LOGFILE"
+  fi
+  rm -f "$CLAUDE_OUT"
 
   # Send Discord notification if the agent created a PR or issue
   node "$AGENT_DIR/scripts/notify-discord.mjs" 2>> "$LOGFILE" || true

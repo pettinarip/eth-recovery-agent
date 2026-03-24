@@ -93,7 +93,7 @@ const CONCURRENT_EVENT_FETCHES = 5
 
 export async function fetchSentry({ authToken, org, project, actedOn, cycleTimestamp }) {
   if (!authToken) {
-    console.error("WARNING: SENTRY_AUTH_TOKEN not set, skipping Sentry source")
+    console.error("Sentry: not configured, skipping")
     return { candidates: [], skipped: 0 }
   }
 
@@ -109,10 +109,11 @@ export async function fetchSentry({ authToken, org, project, actedOn, cycleTimes
 
   // ── Early filtering: skip already-seen and title-noise before fetching events ──
   const needEventFetch = []
+  let alreadySeen = 0
   for (const issue of issues) {
     const shortId = issue.shortId || ""
     if (shortId in actedOn) {
-      console.error(`  ALREADY-SEEN ${shortId}: ${actedOn[shortId].action}`)
+      alreadySeen++
       continue
     }
 
@@ -127,7 +128,7 @@ export async function fetchSentry({ authToken, org, project, actedOn, cycleTimes
     needEventFetch.push(issue)
   }
 
-  console.error(`  ${needEventFetch.length} issues need event fetch (${issues.length - needEventFetch.length} filtered early)`)
+  if (alreadySeen > 0) console.error(`  ${alreadySeen} already-seen, ${needEventFetch.length} need event fetch`)
 
   // ── Fetch events in parallel batches ──
   for (let i = 0; i < needEventFetch.length; i += CONCURRENT_EVENT_FETCHES) {

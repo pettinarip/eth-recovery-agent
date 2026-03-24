@@ -32,7 +32,7 @@ export async function fetchTriggerDev({
   lookbackHours = 24, actedOn, cycleTimestamp,
 }) {
   if (!apiKey || !projectRef) {
-    console.error("WARNING: TRIGGER_DEV_API_KEY or TRIGGER_DEV_PROJECT_REF not set, skipping Trigger.dev source")
+    console.error("Trigger.dev: not configured, skipping")
     return { candidates: [], skipped: 0 }
   }
 
@@ -84,9 +84,10 @@ export async function fetchTriggerDev({
     }
   }
 
+  let alreadySeen = 0
   for (const [itemId, run] of Object.entries(bySignature)) {
     if (itemId in actedOn) {
-      console.error(`  ALREADY-SEEN ${itemId}: ${actedOn[itemId].action}`)
+      alreadySeen++
       continue
     }
 
@@ -113,6 +114,8 @@ export async function fetchTriggerDev({
       dashboard_url: `https://cloud.trigger.dev/projects/v3/${projectRef}/runs/${run.id}`,
     })
   }
+
+  if (alreadySeen > 0) console.error(`  ${alreadySeen} already-seen`)
 
   return { candidates, skipped }
 }

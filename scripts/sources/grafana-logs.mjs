@@ -45,7 +45,7 @@ export async function fetchGrafanaLogs({
   actedOn, cycleTimestamp,
 }) {
   if (!grafanaUrl || !grafanaToken || !datasourceUid) {
-    console.error("  GRAFANA_URL, GRAFANA_TOKEN, or GRAFANA_DATASOURCE_UID not set, skipping")
+    console.error("Grafana: not configured, skipping")
     return { candidates: [], skipped: 0 }
   }
 
@@ -66,12 +66,12 @@ export async function fetchGrafanaLogs({
   })
 
   if (!result?.results?.A?.frames) {
-    console.error("  Grafana: no frames in response")
+    console.error("Grafana: no frames in response")
     return { candidates: [], skipped: 0 }
   }
 
   const rawLogs = parseFrames(result.results.A.frames)
-  console.error(`  Grafana: ${rawLogs.length} WARN/ERROR entries from last hour`)
+  console.error(`Grafana: ${rawLogs.length} WARN/ERROR entries from last hour`)
 
   const logs = rawLogs.map((row) => ({
     level: (row[levelField] || row.level || "ERROR").toUpperCase(),
@@ -96,8 +96,12 @@ export async function fetchGrafanaLogs({
   const candidates = []
   let skipped = 0
 
+  let alreadySeen = 0
   for (const [itemId, entry] of Object.entries(bySignature)) {
-    if (itemId in actedOn) continue
+    if (itemId in actedOn) {
+      alreadySeen++
+      continue
+    }
 
     const { noise, reason } = isFunctionLogNoise(entry)
     if (noise) {
@@ -119,6 +123,8 @@ export async function fetchGrafanaLogs({
       hit_count: entry.hit_count || 1,
     })
   }
+
+  if (alreadySeen > 0) console.error(`  ${alreadySeen} already-seen`)
 
   return { candidates, skipped }
 }
