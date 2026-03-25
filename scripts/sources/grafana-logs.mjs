@@ -4,7 +4,11 @@ import { autoSkip } from "../lib/state.mjs"
 const NOISE_PATTERNS = [/NEXT_NOT_FOUND/, /NEXT_REDIRECT/]
 
 function grafanaLogId(entry) {
-  const msg = (entry.message || "").replace(/["'].+?["']/g, '"x"').replace(/\d+/g, "N").slice(0, 80)
+  const msg = (entry.message || "")
+    .replace(/["'].+?["']/g, '"x"')
+    .replace(/\d+/g, "N")
+    .replace(/:\s+\S+$/, ": x")
+    .slice(0, 80)
   const slug = msg.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase()
   return `grafana-fn-${slug || "unknown"}`
 }

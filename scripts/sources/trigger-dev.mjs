@@ -11,8 +11,10 @@ function triggerDevId(run) {
   const error = (run._errorMessage || "")
     .replace(/["'].+?["']/g, '"x"')
     .replace(/\d+/g, "N")
+    .replace(/https?:\/\/\S+/g, "URL")
+    .toLowerCase()
     .slice(0, 80)
-  const slug = `${task}--${error}`.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "").toLowerCase()
+  const slug = `${task}--${error}`.replace(/[^a-zA-Z0-9]+/g, "-").replace(/^-|-$/g, "")
   return `trigger-${slug || "unknown"}`
 }
 

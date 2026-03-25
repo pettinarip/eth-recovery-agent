@@ -59,6 +59,10 @@ Use `search_issue_events` if you need additional event data beyond what `get_iss
 
 **For Crawler findings:** The item includes the broken resource details. Analyze against the codebase.
 
+**Broken external resources referenced in the codebase:** If a crawler finding shows a broken external resource (403, 404, or persistent status 0) AND the URL is referenced in source code or data files (not just rendered from an external API), classify as **low confidence** and open an issue — the broken resource causes visible UX degradation (broken images, missing embeds). Exception: if the resource is from a transient CDN issue (status 0, single occurrence), skip as before.
+
+**Internal infrastructure:** Check the target repo's AGENTS.md or CLAUDE.md for a list of internal services that may look external. Persistent failures from internal infrastructure should always be at least **low confidence** (open an issue), even if the fix isn't in application code — the team needs to know.
+
 ## Processing Workflow
 
 ### 1. Read Queue & Pick Item
